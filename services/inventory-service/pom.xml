@@ -16,7 +16,8 @@
     <version>1.0.0</version>
     <name>inventory-service</name>
     <description>
-        Inventory Service — Session 6, extended in Session 7 (Saga + Kafka).
+        Inventory Service — Session 6, extended in Session 7 (Saga + Kafka),
+        Session 11 (Pact provider verification test).
         Plain Spring Boot Servlet (blocking) web service — NOT reactive/WebFlux.
         In-memory stock map for now (documented technical debt — see Session 8
         Architecture Clinic).
@@ -25,6 +26,7 @@
     <properties>
         <java.version>21</java.version>
         <spring-cloud.version>2023.0.3</spring-cloud.version>
+        <pact.version>4.6.7</pact.version>
     </properties>
 
     <dependencies>
@@ -45,6 +47,12 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!-- Session 17 — Prometheus metrics -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
         <!-- Session 7 — Kafka, for the Choreography Saga -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
@@ -54,6 +62,14 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Session 11 — Pact Provider Verification -->
+        <dependency>
+            <groupId>au.com.dius.pact.provider</groupId>
+            <artifactId>junit5spring</artifactId>
+            <version>${pact.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

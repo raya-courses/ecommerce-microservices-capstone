@@ -8,18 +8,18 @@
 # port directly. See PROJECT_CONTEXT.md, Section 2, Platform Services table.
 
 server:
-  port: 8081
+  port: ${PORT:8081}
 
 spring:
   application:
     name: product-service
   config:
-    import: "optional:configserver:http://localhost:8888"
+    import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/microservices_pro
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/microservices_pro}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     # DEV ONLY — plaintext credentials. In production these come from
     # Vault (Session 21) and are never committed to git.
   jpa:
@@ -30,8 +30,8 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
       # Same Redis container as Session 3's RequestRateLimiter token
       # bucket store — this is its SECOND, unrelated use (response caching).
       # See docker-compose.yml for the full note.
@@ -44,7 +44,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
 
@@ -52,4 +52,4 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,caches
+        include: health,info,caches,prometheus

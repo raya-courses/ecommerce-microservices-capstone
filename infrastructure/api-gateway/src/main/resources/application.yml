@@ -3,17 +3,17 @@
 # Session 3 — adds: jwt.secret, spring.data.redis, RequestRateLimiter filter
 
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 spring:
   application:
     name: api-gateway
   config:
-    import: "optional:configserver:http://localhost:8888"
+    import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
       # In production: host from Config Server, password from Vault (Session 21).
       # This Redis instance backs RequestRateLimiter's token bucket counters —
       # NOT the response caching introduced in Session 8. Same tool, different
@@ -44,17 +44,38 @@ spring:
                 redis-rate-limiter.burstCapacity: 20    # up to 20 at once
                 redis-rate-limiter.requestedTokens: 1   # each request costs 1 token
                 key-resolver: "#{@ipKeyResolver}"
+        - id: order-service
+          uri: lb://ORDER-SERVICE
+          predicates:
+            - Path=/api/orders/**,/api/v1/orders/**
+          filters:
+            - StripPrefix=0
+            - AddResponseHeader=X-Platform, microservices-pro
+        - id: inventory-service
+          uri: lb://INVENTORY-SERVICE
+          predicates:
+            - Path=/api/v1/inventory/**
+          filters:
+            - StripPrefix=0
+            - AddResponseHeader=X-Platform, microservices-pro
+        - id: payment-service
+          uri: lb://PAYMENT-SERVICE
+          predicates:
+            - Path=/api/payments/**,/api/v1/payments/**
+          filters:
+            - StripPrefix=0
+            - AddResponseHeader=X-Platform, microservices-pro
 
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,gateway
+        include: health,info,gateway,prometheus
 
 jwt:
   secret: ${JWT_SECRET:microservices-pro-course-dev-secret-key-2026-min-256-bits}
@@ -67,4 +88,3 @@ jwt:
   # generator produces will fail signature validation here. Prefer setting
   # the JWT_SECRET environment variable identically in both places instead
   # of relying on the fallback at all.
-

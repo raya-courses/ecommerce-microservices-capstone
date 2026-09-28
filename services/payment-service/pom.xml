@@ -16,11 +16,8 @@
     <version>1.0.0</version>
     <name>payment-service</name>
     <description>
-        Payment Service — Session 4. Plain Spring Boot Servlet (blocking) web
-        service — NOT reactive/WebFlux. This module is the unstable callee
-        that Order Service protects itself against; it has no Resilience4j
-        dependency of its own (resilience is the CALLER's concern, applied
-        in order-service).
+        Payment Service — Session 4 (Circuit Breaker callee), Session 7 (Saga step),
+        Session 12 (Saga Orchestration Command Handler), Session 22 (Idempotency Key).
     </description>
 
     <properties>
@@ -45,11 +42,27 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Session 17 — Prometheus metrics -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
 
-        <!-- Session 7 — Kafka, for the Choreography Saga -->
+        <!-- Session 7 & 12 — Kafka, for Choreography & Orchestration Sagas -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- Session 22 — JPA for Idempotency records -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
         </dependency>
 
         <dependency>

@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: microservices-pro
+
+resources:
+  - 00-namespace.yml
+  - 01-configmaps.yml
+  - 02-secrets.yml
+  - 03-infrastructure.yml
+  - 04-eureka-server.yml
+  - 05-config-server.yml
+  - 06-api-gateway.yml
+  - 07-product-service.yml
+  - 08-order-service.yml
+  - 09-payment-service.yml
+  - 10-inventory-service.yml
+  - 11-ingress.yml
+  - 12-notification-service.yml

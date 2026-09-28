@@ -7,20 +7,22 @@ import org.springframework.stereotype.Component;
 /**
  * InventoryErrorDecoder — Session 6.
  *
- * Implement the TODO below. See docs/labs/session-06-lab-4a.md.
+ * By default, Feign wraps all HTTP errors as FeignException. This
+ * translates them into meaningful domain exceptions.
  */
 @Component
 public class InventoryErrorDecoder implements ErrorDecoder {
 
-    // TODO: Translate HTTP status codes to domain exceptions:
-    //   409 -> InsufficientStockException
-    //   404 -> ProductNotFoundException
-    //   503 -> ServiceUnavailableException
-    //   default -> fall back to new ErrorDecoder.Default().decode(methodKey, response)
     @Override
     public Exception decode(String methodKey, Response response) {
-        // Placeholder so this class compiles before the TODO above is done —
-        // replace this with the real switch on response.status().
-        return new UnsupportedOperationException("TODO: implement decode() for status " + response.status());
+        return switch (response.status()) {
+            case 409 -> new InsufficientStockException(
+                    "Product out of stock — response: " + response.status());
+            case 404 -> new ProductNotFoundException(
+                    "Product not found in Inventory Service");
+            case 503 -> new ServiceUnavailableException(
+                    "Inventory Service temporarily unavailable");
+            default -> new ErrorDecoder.Default().decode(methodKey, response);
+        };
     }
 }

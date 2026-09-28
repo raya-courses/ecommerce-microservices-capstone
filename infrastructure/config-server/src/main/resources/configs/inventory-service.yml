@@ -1,0 +1,5 @@
+# inventory-service.yml
+# Served by Config Server to Inventory Service at startup.
+
+app:
+  source: "config-server"

@@ -23,5 +23,25 @@ Thumbs.db
 *.log
 logs/
 
-# Environment
+# Environment / Secrets
 .env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+kubeconfig
+*.kubeconfig
+
+# Local test / generated artifacts
+**/target/
+**/surefire-reports/
+**/failsafe-reports/
+
+# Local Kubernetes / Helm temp files
+*.tgz
+
+# Misc
+*.tmp
+*.swp

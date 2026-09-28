@@ -1,0 +1,5 @@
+# payment-service.yml
+# Served by Config Server to Payment Service at startup.
+
+app:
+  source: "config-server"

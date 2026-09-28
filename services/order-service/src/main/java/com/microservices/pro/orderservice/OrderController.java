@@ -11,10 +11,15 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * OrderController.
  *
- * Implement the TODOs below. See docs/labs/session-07-lab-5a.md.
+ * POST /api/orders is wired to OrderService.createOrder() — the Session 7
+ * Saga initiator (Inventory pre-check via Feign, then publish
+ * OrderPlacedEvent to Kafka, return PENDING immediately).
  *
- * createOrderAsync() (Sessions 4-5) is NOT exposed through any endpoint
- * here — it exists for lab/test purposes only on OrderService itself.
+ * OrderService.createOrderAsync() — the Session 4/5 resilience-pattern
+ * teaching method — remains a valid, tested method on OrderService, but is
+ * deliberately NOT exposed through any endpoint here. It exists for
+ * Sessions 4-5's lab/test purposes only; this repo does not add a second
+ * endpoint for it.
  */
 @RestController
 @RequestMapping("/api/orders")
@@ -26,15 +31,13 @@ public class OrderController {
         this.orderService = orderService;
     }
 
-    // TODO 1: POST /api/orders → call orderService.createOrder(request)
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(@RequestBody OrderRequest request) {
-        throw new UnsupportedOperationException("TODO: implement createOrder()");
+        return ResponseEntity.ok(orderService.createOrder(request));
     }
 
-    // TODO 2: GET /api/orders/{orderId}/status → call orderService.getOrderStatus(orderId)
     @GetMapping("/{orderId}/status")
     public ResponseEntity<OrderStatus> getStatus(@PathVariable String orderId) {
-        throw new UnsupportedOperationException("TODO: implement getStatus()");
+        return ResponseEntity.ok(orderService.getOrderStatus(orderId));
     }
 }

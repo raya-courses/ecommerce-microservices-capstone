@@ -1,0 +1,150 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      push_images:
+        description: 'Push Docker images to container registry'
+        required: false
+        type: boolean
+        default: false
+      deploy_k8s:
+        description: 'Deploy to Kubernetes cluster (manual trigger only)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: Build & Test Java Modules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run unit and integration tests
+        run: mvn clean test --batch-mode
+
+      - name: Package artifacts
+        run: mvn package -DskipTests --batch-mode
+
+  validate-k8s:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      - name: Validate Kustomize and manifests
+        run: |
+          echo "Validating kustomize build..."
+          kubectl kustomize k8s/ > /dev/null
+          echo "Validating client-side dry-run apply..."
+          kubectl apply --dry-run=client -k k8s/
+
+  docker-build:
+    name: Build & Push Docker Images
+    needs: [test-and-build, validate-k8s]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: eureka-server
+            context: infrastructure/eureka-server
+          - service: config-server
+            context: infrastructure/config-server
+          - service: api-gateway
+            context: infrastructure/api-gateway
+          - service: product-service
+            context: services/product-service
+          - service: order-service
+            context: services/order-service
+          - service: payment-service
+            context: services/payment-service
+          - service: inventory-service
+            context: services/inventory-service
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine whether to push images
+        id: check_push
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.push_images }}" = "true" ] && [ -n "${{ secrets.REGISTRY_USERNAME }}" ]; then
+            echo "push=true" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ] && [ -n "${{ secrets.REGISTRY_USERNAME }}" ]; then
+            echo "push=true" >> $GITHUB_OUTPUT
+          else
+            echo "push=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Log in to Container Registry
+        if: steps:check_push.outputs.push == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY_URL || 'docker.io' }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and optionally push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/Dockerfile
+          push: ${{ steps.check_push.outputs.push == 'true' }}
+          tags: |
+            ${{ secrets.REGISTRY_URL || 'docker.io' }}/${{ secrets.REGISTRY_NAMESPACE || github.repository_owner }}/${{ matrix.service }}:${{ github.sha }}
+            ${{ secrets.REGISTRY_URL || 'docker.io' }}/${{ secrets.REGISTRY_NAMESPACE || github.repository_owner }}/${{ matrix.service }}:latest
+
+  deploy-kubernetes:
+    name: Deploy to Kubernetes
+    needs: [docker-build]
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_k8s == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      - name: Configure Kubeconfig
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -k k8s/
+          kubectl rollout status deployment/api-gateway -n microservices-pro --timeout=180s

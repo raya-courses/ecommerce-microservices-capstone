@@ -1,13 +1,15 @@
 package com.microservices.pro.productservice;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * ProductController — Session 1, Lab 1.
  *
- * Implement the endpoints below. See docs/labs/session-01-lab-01.md for the
- * full lab instructions and acceptance criteria.
- *
+ * Matches the original lab spec exactly:
  *   GET    /api/v1/products       → all products
  *   GET    /api/v1/products/{id}  → product by id (404 if not found)
  *   POST   /api/v1/products       → create a new product (201 Created)
@@ -23,12 +25,27 @@ public class ProductController {
         this.productService = productService;
     }
 
-    // TODO: GET /api/v1/products         → return all products
+    @GetMapping
+    public ResponseEntity<List<Product>> getAll() {
+        return ResponseEntity.ok(productService.findAll());
+    }
 
-    // TODO: GET /api/v1/products/{id}    → return product by id (404 if not found)
+    @GetMapping("/{id}")
+    public ResponseEntity<Product> getById(@PathVariable Long id) {
+        return productService.findById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
 
-    // TODO: POST /api/v1/products        → create a new product (201 Created)
+    @PostMapping
+    public ResponseEntity<Product> create(@RequestBody Product product) {
+        Product saved = productService.save(product);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    }
 
-    // TODO: DELETE /api/v1/products/{id} → delete a product
-
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteById(@PathVariable Long id) {
+        productService.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
 }

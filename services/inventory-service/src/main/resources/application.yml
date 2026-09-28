@@ -3,16 +3,16 @@
 # Session 7 — adds: spring.kafka
 
 server:
-  port: 8084
+  port: ${PORT:8084}
 
 spring:
   application:
     name: inventory-service
   config:
-    import: "optional:configserver:http://localhost:8888"
+    import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -31,7 +31,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
   instance:
     prefer-ip-address: true
 
@@ -39,4 +39,4 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus

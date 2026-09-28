@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.microservices.pro</groupId>
+    <artifactId>microservices-pro-platform</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+    <name>microservices-pro-platform</name>
+    <description>Root Aggregator POM for Microservices Pro Platform</description>
+
+    <modules>
+        <module>infrastructure/eureka-server</module>
+        <module>infrastructure/config-server</module>
+        <module>infrastructure/api-gateway</module>
+        <module>services/product-service</module>
+        <module>services/order-service</module>
+        <module>services/inventory-service</module>
+        <module>services/payment-service</module>
+        <module>tools/jwt-generator</module>
+    </modules>
+</project>

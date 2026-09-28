@@ -1,0 +1,5 @@
+# order-service.yml
+# Served by Config Server to Order Service at startup.
+
+app:
+  source: "config-server"
