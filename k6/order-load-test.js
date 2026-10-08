@@ -1,4 +1,4 @@
-// order-load-test.js — Session 23, Lab 19
+// order-load-test.js — Session 23, Lab 19 / Capstone Phase 7
 //
 // Staged load test against the full Order → Inventory → Payment chain.
 // Establishes a baseline: requests/sec, P95/P99 latency, error rate.
@@ -14,8 +14,7 @@ import { Rate } from 'k6/metrics';
 const errorRate = new Rate('errors');
 
 export const options = {
-  // 🎯 DESIGN CHOICE: staged ramp-up avoids cold-start artifacts
-  // (JIT compilation, cache warming) inflating early latency numbers.
+  // Staged ramp-up avoids cold-start artifacts
   stages: [
     { duration: '30s', target: 5  },  // ramp up to 5 VUs
     { duration: '1m',  target: 10 },  // sustain at 10 VUs — expected baseline
@@ -37,7 +36,7 @@ const headers = {
 };
 
 export default function () {
-  // POST /api/orders — triggers the full Saga chain
+  // POST /api/v1/orders — triggers the full Saga chain
   const payload = JSON.stringify({
     productId: 'PROD-001',
     quantity:  1,
@@ -45,7 +44,7 @@ export default function () {
     customerId: `cust-${__VU}`,   // unique per VU to avoid same-customer collisions
   });
 
-  const res = http.post(`${BASE_URL}/api/orders`, payload, { headers });
+  const res = http.post(`${BASE_URL}/api/v1/orders`, payload, { headers });
 
   const ok = check(res, {
     'order accepted (200 or 202)': (r) => r.status === 200 || r.status === 202,

@@ -16,6 +16,7 @@ spec:
       labels:
         app: api-gateway
     spec:
+      serviceAccountName: api-gateway-sa
       containers:
         - name: api-gateway
           image: microservices-pro/api-gateway:latest

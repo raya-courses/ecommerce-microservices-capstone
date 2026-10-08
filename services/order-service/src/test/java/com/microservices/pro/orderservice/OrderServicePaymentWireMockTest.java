@@ -1,5 +1,8 @@
 package com.microservices.pro.orderservice;
 
+import com.microservices.pro.orderservice.analytics.AnalyticsProcessedEventRepository;
+import com.microservices.pro.orderservice.analytics.HourlyOrderMetricRepository;
+import com.microservices.pro.orderservice.analytics.OrderAnalyticsRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -26,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.cloud.config.enabled=false",
         "spring.config.import=",
         "spring.cache.type=none",
-        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration"
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration,org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration"
 })
 class OrderServicePaymentWireMockTest {
 
@@ -40,10 +43,22 @@ class OrderServicePaymentWireMockTest {
     private OutboxRepository outboxRepository;
 
     @MockBean
+    private OrderAnalyticsRepository orderAnalyticsRepository;
+
+    @MockBean
+    private AnalyticsProcessedEventRepository analyticsProcessedEventRepository;
+
+    @MockBean
+    private HourlyOrderMetricRepository hourlyOrderMetricRepository;
+
+    @MockBean
     private KafkaTemplate<String, Object> kafkaTemplate;
 
     @MockBean
     private KafkaTemplate<String, String> kafkaStringTemplate;
+
+    @MockBean
+    private OrderServiceTokenClient orderServiceTokenClient;
 
     // ── Happy Path: Inventory says available → order proceeds ──────────
 

@@ -10,19 +10,10 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * OutboxEvent — Session 22.
+ * OutboxEvent — Session 22 / Phase 5 Transactional Outbox pattern.
  *
  * Persisted in the SAME local transaction as the business entity (Order).
  * The OutboxPublisher polls this table and publishes unpublished rows to Kafka.
- *
- * Closing Technical Debt item from Session 8 Architecture Clinic:
- *   "Session 7's Saga has a dual-write gap: orderRepository.save() and
- *   kafkaTemplate.send() are two separate, non-atomic operations."
- *
- * The fix: kafkaTemplate.send() is removed from createOrder() and replaced
- * by a write to this table — inside the same @Transactional boundary as
- * the Order save. If the JVM crashes after the commit, the row remains in
- * the table and the OutboxPublisher will publish it on the next poll.
  */
 @Entity
 @Table(name = "outbox_events")
@@ -36,7 +27,10 @@ public class OutboxEvent {
     private String aggregateId;    // orderId
 
     @Column(nullable = false)
-    private String eventType;      // "OrderPlaced"
+    private String aggregateType;  // "ORDER"
+
+    @Column(nullable = false)
+    private String eventType;      // "OrderPlacedEvent", "OrderConfirmedEvent", "OrderCancelledEvent"
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String payload;        // JSON-serialized event
@@ -47,21 +41,35 @@ public class OutboxEvent {
     @Column(nullable = false)
     private boolean published;
 
+    @Column
+    private Instant publishedAt;
+
     protected OutboxEvent() {}
 
-    public OutboxEvent(String aggregateId, String eventType, String payload) {
-        this.aggregateId = aggregateId;
-        this.eventType   = eventType;
-        this.payload     = payload;
-        this.createdAt   = Instant.now();
-        this.published   = false;
+    public OutboxEvent(String aggregateId, String aggregateType, String eventType, String payload) {
+        this.aggregateId   = aggregateId;
+        this.aggregateType = (aggregateType != null && !aggregateType.isBlank()) ? aggregateType : "ORDER";
+        this.eventType     = eventType;
+        this.payload       = payload;
+        this.createdAt     = Instant.now();
+        this.published     = false;
     }
 
-    public Long getId()             { return id; }
-    public String getAggregateId()  { return aggregateId; }
-    public String getEventType()    { return eventType; }
-    public String getPayload()      { return payload; }
-    public Instant getCreatedAt()   { return createdAt; }
-    public boolean isPublished()    { return published; }
-    public void markPublished()     { this.published = true; }
+    public OutboxEvent(String aggregateId, String eventType, String payload) {
+        this(aggregateId, "ORDER", eventType, payload);
+    }
+
+    public Long getId()                { return id; }
+    public String getAggregateId()     { return aggregateId; }
+    public String getAggregateType()   { return aggregateType; }
+    public String getEventType()       { return eventType; }
+    public String getPayload()         { return payload; }
+    public Instant getCreatedAt()      { return createdAt; }
+    public boolean isPublished()       { return published; }
+    public Instant getPublishedAt()    { return publishedAt; }
+
+    public void markPublished() {
+        this.published   = true;
+        this.publishedAt = Instant.now();
+    }
 }

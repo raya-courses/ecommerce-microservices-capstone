@@ -2,35 +2,20 @@ package com.microservices.pro.orderservice;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
- * OutboxPublisher — Session 22.
+ * OutboxPublisher — Session 22 / Phase 5 Transactional Outbox pattern.
  *
  * Polls the outbox_events table every second and publishes unpublished rows
- * to Kafka, then marks them as published.
- *
- * ⚖ ENGINEERING DECISION: Polling Publisher vs Change Data Capture (CDC):
- *   Polling Publisher (this class): simple, uses existing PostgreSQL,
- *     introduces ~1s latency between commit and Kafka publish.
- *     Correct for most platforms; starts here.
- *   CDC (e.g. Debezium): reads database WAL directly, near-zero latency,
- *     no polling queries. Additional infrastructure to operate.
- *     Use when polling overhead or latency become real problems.
- *
- * REQUIRES: @EnableScheduling on a @Configuration class (e.g. OrderServiceApplication).
- *   Without it, @Scheduled methods are silently ignored — same "silent AOP
- *   requirement" pattern as @Timed (Session 17) and Resilience4j (Session 4).
- *
- * At-least-once delivery note: if the JVM crashes after kafkaTemplate.send()
- * but before outboxRepository.save() commits markPublished(), the row will
- * be re-published on the next poll. Kafka consumers must be idempotent. See
- * the S7 Saga's consumer-side idempotency guard — it is still needed.
+ * to Kafka topic "order-events", then marks them as published with timestamp.
  */
 @Component
 public class OutboxPublisher {
@@ -38,10 +23,10 @@ public class OutboxPublisher {
     private static final Logger log = LoggerFactory.getLogger(OutboxPublisher.class);
 
     private final OutboxRepository outboxRepository;
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     public OutboxPublisher(OutboxRepository outboxRepository,
-                           KafkaTemplate<String, String> kafkaTemplate) {
+                           @Autowired(required = false) KafkaTemplate<String, Object> kafkaTemplate) {
         this.outboxRepository = outboxRepository;
         this.kafkaTemplate    = kafkaTemplate;
     }
@@ -49,6 +34,9 @@ public class OutboxPublisher {
     @Scheduled(fixedDelay = 1000)
     @Transactional
     public void publishPendingEvents() {
+        if (kafkaTemplate == null) {
+            return;
+        }
         List<OutboxEvent> pending = outboxRepository.findUnpublished();
         if (pending.isEmpty()) return;
 
@@ -56,15 +44,17 @@ public class OutboxPublisher {
 
         for (OutboxEvent event : pending) {
             try {
-                kafkaTemplate.send("order-events", event.getAggregateId(), event.getPayload());
+                // Synchronously wait for Kafka ack up to 5 seconds to ensure reliable delivery before marking
+                kafkaTemplate.send("order-events", event.getAggregateId(), event.getPayload())
+                        .get(5, TimeUnit.SECONDS);
                 event.markPublished();
                 outboxRepository.save(event);
-                log.info("[OUTBOX] Published and marked: id={} orderId={}",
-                        event.getId(), event.getAggregateId());
+                log.info("[OUTBOX] Published and marked: id={} orderId={} type={}",
+                        event.getId(), event.getAggregateId(), event.getEventType());
             } catch (Exception e) {
-                log.error("[OUTBOX] Failed to publish event id={} — will retry on next poll",
-                        event.getId(), e);
-                // Do NOT mark as published — next poll will retry.
+                log.error("[OUTBOX] Failed to publish event id={} type={} — will retry on next poll",
+                        event.getId(), event.getEventType(), e);
+                // Do NOT mark as published — next poll will retry safely.
             }
         }
     }

@@ -1,102 +1,85 @@
 package com.microservices.pro.inventoryservice;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Optional;
 
 /**
- * InventoryService.
- *
- * Session 6 — checkStock(): the synchronous, read-only pre-check called by
- * Order Service via OpenFeign before confirming an order.
- *
- * Session 7 — reserveStock()/releaseStock(): the actual stock mutations
- * driven by the Choreography Saga (InventorySagaHandler), reacting to
- * OrderPlaced / PaymentFailed Kafka events rather than being called
- * directly by another service.
- *
- * In-memory store (ConcurrentHashMap) — documented technical debt: no
- * persistence across restarts. See Session 8 Architecture Clinic
- * questions (docs/trainer/session-08-architecture-clinic-questions.md).
- *
- * Reservation tracking note: releaseStock(orderId) (Session 7's documented
- * signature — the Saga only has the orderId on the PaymentFailed event, not
- * the original productId/quantity) needs to know what THAT specific order
- * reserved. This repo tracks that with a small in-memory
- * reservationsByOrderId map alongside the stock map — itself another
- * documented technical debt item (in-memory, not persisted) consistent
- * with the rest of this class.
+ * InventoryService backed by Spring Data JPA and PostgreSQL.
  */
 @Service
 public class InventoryService {
 
-    private final Map<String, StockItem> stock = new ConcurrentHashMap<>(Map.of(
-            "PROD-001", new StockItem("PROD-001", 100, 0),
-            "PROD-002", new StockItem("PROD-002", 5, 0),
-            "PROD-003", new StockItem("PROD-003", 0, 0)  // out of stock
-    ));
+    private final StockItemRepository stockItemRepository;
+    private final StockReservationRepository stockReservationRepository;
 
-    private final Map<String, Reservation> reservationsByOrderId = new ConcurrentHashMap<>();
-
-    private record Reservation(String productId, int quantity) {}
-
-    public StockCheckResponse checkStock(String productId, int requestedQty) {
-        StockItem item = stock.getOrDefault(productId, new StockItem(productId, 0, 0));
-        boolean available = item.hasStock(requestedQty);
-        return new StockCheckResponse(productId, requestedQty,
-                available, item.availableQuantity() - item.reservedQuantity());
+    @Autowired
+    public InventoryService(StockItemRepository stockItemRepository,
+                            StockReservationRepository stockReservationRepository) {
+        this.stockItemRepository = stockItemRepository;
+        this.stockReservationRepository = stockReservationRepository;
     }
 
-    /**
-     * Session 7 — commits a reservation against an already stock-checked
-     * order. Throws InsufficientStockException if the stock disappeared
-     * between the Session 6 pre-check and this Saga step (e.g. a
-     * concurrent order consumed it first) — the Saga's compensation path
-     * handles this the same way as any other reservation failure.
-     */
+    @Transactional(readOnly = true)
+    public StockCheckResponse checkStock(String productId, int requestedQty) {
+        StockItem item = stockItemRepository.findById(productId)
+                .orElse(new StockItem(productId, 0, 0));
+        boolean available = item.hasStock(requestedQty);
+        return new StockCheckResponse(productId, requestedQty,
+                available, item.getAvailableQuantity() - item.getReservedQuantity());
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<StockItem> getStock(String productId) {
+        return stockItemRepository.findById(productId);
+    }
+
+    @Transactional
+    public StockItem updateStock(String productId, int quantity) {
+        StockItem item = stockItemRepository.findById(productId)
+                .orElse(new StockItem(productId, 0, 0));
+        item.setAvailableQuantity(quantity);
+        return stockItemRepository.save(item);
+    }
+
+    @Transactional
     public void reserveStock(String productId, int quantity, String orderId) {
-        StockItem item = stock.getOrDefault(productId, new StockItem(productId, 0, 0));
+        // Idempotency: if reservation already exists for this orderId, do not decrement/reserve twice
+        if (stockReservationRepository.findById(orderId).isPresent()) {
+            return;
+        }
+
+        StockItem item = stockItemRepository.findById(productId)
+                .orElse(new StockItem(productId, 0, 0));
         if (!item.hasStock(quantity)) {
             throw new InsufficientStockException(
                     "Cannot reserve " + quantity + " of " + productId + " for order " + orderId);
         }
-        stock.put(productId, new StockItem(
-                item.productId(),
-                item.availableQuantity(),
-                item.reservedQuantity() + quantity
-        ));
-        reservationsByOrderId.put(orderId, new Reservation(productId, quantity));
+        item.setReservedQuantity(item.getReservedQuantity() + quantity);
+        stockItemRepository.save(item);
+        stockReservationRepository.save(new StockReservation(orderId, productId, quantity));
     }
 
-    /**
-     * Session 7 — compensation: releases the reservation associated with
-     * orderId when the Saga fails downstream (PaymentFailed). Matches the
-     * docx's single-argument signature exactly — the PaymentFailedEvent
-     * only carries orderId, so this method looks up what that order
-     * reserved via reservationsByOrderId.
-     *
-     * If no reservation is found (e.g. duplicate compensation, or this
-     * order never successfully reserved anything), this is a no-op — see
-     * the idempotency note in Session 7 docx's Common Issues table
-     * ("Duplicate compensation (inventory released twice)").
-     */
+    @Transactional
     public void releaseStock(String orderId) {
-        Reservation reservation = reservationsByOrderId.remove(orderId);
-        if (reservation == null) {
-            return; // already released, or nothing was ever reserved — idempotent no-op
+        Optional<StockReservation> resOpt = stockReservationRepository.findById(orderId);
+        if (resOpt.isEmpty()) {
+            return; // idempotent no-op
         }
-        StockItem item = stock.getOrDefault(reservation.productId(), new StockItem(reservation.productId(), 0, 0));
-        int newReserved = Math.max(0, item.reservedQuantity() - reservation.quantity());
-        stock.put(reservation.productId(), new StockItem(item.productId(), item.availableQuantity(), newReserved));
+        StockReservation reservation = resOpt.get();
+        stockReservationRepository.delete(reservation);
+
+        stockItemRepository.findById(reservation.getProductId()).ifPresent(item -> {
+            int newReserved = Math.max(0, item.getReservedQuantity() - reservation.getQuantity());
+            item.setReservedQuantity(newReserved);
+            stockItemRepository.save(item);
+        });
     }
 
-    /**
-     * Session 11 — Pact @State setup helper.
-     * Package-private intentionally — only used by InventoryServicePactVerificationTest
-     * to set the in-memory stock to a known state before each Pact interaction is verified.
-     */
-    void resetForTesting(String productId, int available, int reserved) {
-        stock.put(productId, new StockItem(productId, available, reserved));
+    @Transactional
+    public void resetForTesting(String productId, int available, int reserved) {
+        stockItemRepository.save(new StockItem(productId, available, reserved));
     }
 }

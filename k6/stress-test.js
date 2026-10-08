@@ -1,4 +1,4 @@
-// stress-test.js — Session 23, Lab 19
+// stress-test.js — Session 23, Lab 19 / Capstone Phase 7
 //
 // Stress test: ramps WELL beyond expected capacity to find the breaking
 // point and observe resilience patterns (Bulkhead → TimeLimiter →
@@ -19,7 +19,7 @@
 // Run: k6 run -e TEST_JWT=$TEST_JWT k6/stress-test.js
 
 import http   from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 import { Rate, Trend } from 'k6/metrics';
 
 const errorRate        = new Rate('errors');
@@ -60,7 +60,7 @@ export default function () {
     customerId: `stress-cust-${__VU}`,
   });
 
-  const res = http.post(`${BASE_URL}/api/orders`, payload, {
+  const res = http.post(`${BASE_URL}/api/v1/orders`, payload, {
     headers,
     timeout: '6s',
   });

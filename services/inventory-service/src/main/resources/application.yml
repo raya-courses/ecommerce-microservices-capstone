@@ -1,7 +1,4 @@
 # application.yml — Inventory Service
-# Session 6 — port, Eureka, Config Server
-# Session 7 — adds: spring.kafka
-
 server:
   port: ${PORT:8084}
 
@@ -11,22 +8,35 @@ spring:
   config:
     import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
 
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/inventory_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    listener:
+      observation-enabled: true
+    template:
+      observation-enabled: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
-      group-id: ${spring.application.name}  # default group; specific @KafkaListeners
-                                              # override with their own groupId where
-                                              # the docx requires a DIFFERENT group
-                                              # (e.g. inventory-compensation) — see
-                                              # InventorySagaHandler.java
+      group-id: ${spring.application.name}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "com.microservices.pro.*"
-      auto-offset-reset: earliest   # if new consumer, read from beginning
+      auto-offset-reset: earliest
 
 eureka:
   client:
@@ -40,3 +50,9 @@ management:
     web:
       exposure:
         include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://localhost:9411/api/v2/spans}

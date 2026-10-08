@@ -2,13 +2,15 @@ package com.microservices.pro.inventoryservice;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
- * InventoryController — Session 6.
+ * InventoryController — Session 6 / Phase 4 Capstone alignment.
+ *
+ * Endpoints:
+ *   GET /api/v1/inventory/check?productId=&quantity= (internal/service check)
+ *   GET /api/v1/inventory/{productId}                (stock query)
+ *   PUT /api/v1/inventory/{productId}                (ADMIN stock adjustment)
  */
 @RestController
 @RequestMapping("/api/v1/inventory")
@@ -29,5 +31,20 @@ public class InventoryController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
         }
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{productId}")
+    public ResponseEntity<StockItem> getStock(@PathVariable String productId) {
+        return inventoryService.getStock(productId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{productId}")
+    public ResponseEntity<StockItem> updateStock(
+            @PathVariable String productId,
+            @RequestBody StockAdjustmentRequest request) {
+        StockItem updated = inventoryService.updateStock(productId, request.quantity());
+        return ResponseEntity.ok(updated);
     }
 }

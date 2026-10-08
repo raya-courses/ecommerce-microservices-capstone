@@ -1,9 +1,4 @@
 # application.yml — Order Service
-# Session 4 — adds: resilience4j.circuitbreaker, resilience4j.retry
-# Session 5 — adds: resilience4j.bulkhead, resilience4j.timelimiter
-# Session 6 — adds: (no new config — Feign uses Eureka discovery automatically)
-# Session 7 — adds: spring.datasource (Order persistence), spring.kafka
-
 server:
   port: ${PORT:8082}
 
@@ -14,28 +9,43 @@ spring:
     import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/microservices_pro}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/order_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
-    # DEV ONLY — see Product Service's application.yml for the same note.
+
   jpa:
     hibernate:
-      ddl-auto: update  # DEV ONLY — see Product Service's application.yml.
+      ddl-auto: validate
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
 
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    listener:
+      observation-enabled: true
+    template:
+      observation-enabled: true
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
     consumer:
-      group-id: ${spring.application.name}  # default; specific @KafkaListeners
-                                              # override with their own groupId —
-                                              # see OrderSagaEventHandler.java
+      group-id: ${spring.application.name}
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "com.microservices.pro.*"
       auto-offset-reset: earliest
+
+  cloud:
+    openfeign:
+      micrometer:
+        enabled: true
+
+feign:
+  micrometer:
+    enabled: true
 
 eureka:
   client:
@@ -51,41 +61,72 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,circuitbreakers,bulkheads,retries,prometheus
+        include: health,info,circuitbreakers,bulkheads,retries,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://localhost:9411/api/v2/spans}
 
 resilience4j:
   circuitbreaker:
     instances:
       paymentService:
         sliding-window-type: COUNT_BASED
-        sliding-window-size: 10          # track last 10 calls
-        failure-rate-threshold: 50        # open if 50%+ fail
-        wait-duration-in-open-state: 5s  # wait 5s before HALF-OPEN
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 5s
         permitted-number-of-calls-in-half-open-state: 3
         automatic-transition-from-open-to-half-open-enabled: true
-        register-health-indicator: true  # expose via Actuator
+        register-health-indicator: true
+      inventoryService:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 5s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+        ignore-exceptions:
+          - com.microservices.pro.orderservice.InsufficientStockException
 
   retry:
     instances:
       paymentService:
-        max-attempts: 3             # try 3 times total
-        wait-duration: 500ms        # wait 500ms between attempts
+        max-attempts: 3
+        wait-duration: 500ms
         enable-exponential-backoff: true
-        exponential-backoff-multiplier: 2  # 500ms → 1s → 2s
+        exponential-backoff-multiplier: 2
         retry-exceptions:
-          - java.lang.RuntimeException   # only retry on these
+          - java.lang.RuntimeException
         ignore-exceptions:
-          - java.lang.IllegalArgumentException  # never retry on these
+          - java.lang.IllegalArgumentException
+      inventoryService:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - java.lang.RuntimeException
+        ignore-exceptions:
+          - java.lang.IllegalArgumentException
+          - com.microservices.pro.orderservice.InsufficientStockException
 
-  # Session 5 — added below
   bulkhead:
     instances:
       paymentService:
-        max-concurrent-calls: 10    # max 10 simultaneous calls to Payment
-        max-wait-duration: 0ms      # do NOT wait — fail immediately if full
+        max-concurrent-calls: 10
+        max-wait-duration: 0ms
+      inventoryService:
+        max-concurrent-calls: 10
+        max-wait-duration: 0ms
 
   timelimiter:
     instances:
       paymentService:
-        timeout-duration: 2s         # fail if Payment takes > 2 seconds
-        cancel-running-future: true  # cancel the thread on timeout
+        timeout-duration: 2s
+        cancel-running-future: true
+      inventoryService:
+        timeout-duration: 2s
+        cancel-running-future: true

@@ -1,28 +1,18 @@
 package com.microservices.pro.orderservice;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
- * OrderController.
+ * OrderController — Session 7 / Phase 4 Capstone API alignment.
  *
- * POST /api/orders is wired to OrderService.createOrder() — the Session 7
- * Saga initiator (Inventory pre-check via Feign, then publish
- * OrderPlacedEvent to Kafka, return PENDING immediately).
- *
- * OrderService.createOrderAsync() — the Session 4/5 resilience-pattern
- * teaching method — remains a valid, tested method on OrderService, but is
- * deliberately NOT exposed through any endpoint here. It exists for
- * Sessions 4-5's lab/test purposes only; this repo does not add a second
- * endpoint for it.
+ * All endpoints mapped to /api/v1/orders.
  */
 @RestController
-@RequestMapping("/api/orders")
+@RequestMapping("/api/v1/orders")
 public class OrderController {
 
     private final OrderService orderService;
@@ -32,8 +22,54 @@ public class OrderController {
     }
 
     @PostMapping
-    public ResponseEntity<OrderResponse> createOrder(@RequestBody OrderRequest request) {
-        return ResponseEntity.ok(orderService.createOrder(request));
+    public ResponseEntity<OrderResponse> createOrder(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestBody OrderRequest request) {
+
+        String customerId = (userId != null && !userId.isBlank()) ? userId : request.customerId();
+        OrderRequest effectiveRequest = new OrderRequest(
+                request.productId(),
+                request.quantity(),
+                request.amount(),
+                customerId
+        );
+
+        OrderResponse response = orderService.createOrder(effectiveRequest);
+        if ("REJECTED".equals(response.status())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+        }
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{orderId}")
+    public ResponseEntity<Order> getOrder(
+            @PathVariable String orderId,
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles) {
+
+        Order order = orderService.getOrder(orderId);
+        if (userId != null && !userId.isBlank()) {
+            boolean isAdmin = roles != null && roles.contains("ADMIN");
+            if (!isAdmin && order.getCustomerId() != null && !userId.equals(order.getCustomerId())) {
+                throw new SecurityException("Access denied: cannot access orders belonging to another user");
+            }
+        }
+        return ResponseEntity.ok(order);
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Order>> getOrders(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestHeader(value = "X-User-Roles", required = false) String roles) {
+
+        boolean isAdmin = roles != null && roles.contains("ADMIN");
+        if (isAdmin) {
+            return ResponseEntity.ok(orderService.getAllOrders());
+        }
+        if (userId != null && !userId.isBlank()) {
+            return ResponseEntity.ok(orderService.getOrdersByCustomerId(userId));
+        }
+        return ResponseEntity.ok(orderService.getAllOrders());
     }
 
     @GetMapping("/{orderId}/status")

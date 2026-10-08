@@ -1,12 +1,4 @@
 # application.yml — Product Service
-# Session 1 — port, Eureka, Config Server
-# Session 1 homework (implemented Session 8) — spring.datasource (PostgreSQL)
-# Session 8 — spring.data.redis, spring.cache
-#
-# Port 8081: clients reach Product Service through the API Gateway (port 8080,
-# added Session 2) via Eureka service discovery — they never need to know this
-# port directly. See PROJECT_CONTEXT.md, Section 2, Platform Services table.
-
 server:
   port: ${PORT:8081}
 
@@ -17,24 +9,22 @@ spring:
     import: "${SPRING_CONFIG_IMPORT:optional:configserver:http://localhost:8888}"
 
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/microservices_pro}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/product_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:postgres}
-    # DEV ONLY — plaintext credentials. In production these come from
-    # Vault (Session 21) and are never committed to git.
+
   jpa:
     hibernate:
-      ddl-auto: update  # DEV ONLY — auto-creates/updates the schema from
-                         # the @Entity. Production uses Flyway/Liquibase
-                         # migrations instead.
+      ddl-auto: validate
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
 
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
-      # Same Redis container as Session 3's RequestRateLimiter token
-      # bucket store — this is its SECOND, unrelated use (response caching).
-      # See docker-compose.yml for the full note.
   cache:
     type: redis
     redis:
@@ -53,3 +43,9 @@ management:
     web:
       exposure:
         include: health,info,caches,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://localhost:9411/api/v2/spans}

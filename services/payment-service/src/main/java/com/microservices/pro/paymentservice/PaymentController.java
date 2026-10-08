@@ -7,25 +7,19 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
 
 /**
- * PaymentController — Session 4 (original) + Session 22 (idempotency).
+ * PaymentController — Session 4 (original) + Session 22 (idempotency) + Phase 4 Capstone alignment.
  *
- * Session 22 change: every POST /api/payments can include an
- * Idempotency-Key header. The controller checks the header before
- * processing:
- *   - Key already in DB, status COMPLETED: return cached response (200)
- *   - Key already in DB, status PROCESSING: return 202 Accepted
- *   - Key not in DB: process and store
- *
- * Closes Session 4 Technical Debt:
- *   "No idempotency on payment retry — if Resilience4j @Retry fires the
- *    same payment request twice, the customer is charged twice."
+ * Endpoints:
+ *   POST /api/v1/payments            - process payment with persistent idempotency
+ *   POST /api/v1/payments/{id}/refund - refund payment and persist status
  */
 @RestController
-@RequestMapping("/api/payments")
+@RequestMapping("/api/v1/payments")
 public class PaymentController {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentController.class);
@@ -41,10 +35,18 @@ public class PaymentController {
     @Autowired(required = false)
     private IdempotencyRepository idempotencyRepository;
 
+    @Autowired(required = false)
+    private PaymentRepository paymentRepository;
+
     public PaymentController() {}
 
-    public PaymentController(IdempotencyRepository idempotencyRepository) {
+    public PaymentController(IdempotencyRepository idempotencyRepository, PaymentRepository paymentRepository) {
         this.idempotencyRepository = idempotencyRepository;
+        this.paymentRepository = paymentRepository;
+    }
+
+    public PaymentController(IdempotencyRepository idempotencyRepository) {
+        this(idempotencyRepository, null);
     }
 
     @PostMapping
@@ -53,13 +55,17 @@ public class PaymentController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey)
             throws InterruptedException {
 
-        // ── Idempotency check (Session 22) ────────────────────────────────
-        if (idempotencyKey != null && !idempotencyKey.isBlank() && idempotencyRepository != null) {
-            var existing = idempotencyRepository.findById(idempotencyKey);
+        String effectiveKey = (idempotencyKey != null && !idempotencyKey.isBlank())
+                ? idempotencyKey
+                : ("order-" + request.orderId());
+
+        // ── Idempotency check ─────────────────────────────────────────
+        if (idempotencyRepository != null) {
+            var existing = idempotencyRepository.findById(effectiveKey);
             if (existing.isPresent()) {
                 IdempotencyRecord record = existing.get();
                 log.info("[IDEMPOTENCY] Duplicate request detected for key={} status={}",
-                        idempotencyKey, record.getStatus());
+                        effectiveKey, record.getStatus());
                 if ("COMPLETED".equals(record.getStatus())) {
                     return ResponseEntity.ok(
                             new PaymentResponse(record.getResponsePayload(), "COMPLETED", request.amount()));
@@ -67,35 +73,84 @@ public class PaymentController {
                 return ResponseEntity.accepted()
                         .body(new PaymentResponse(null, "PROCESSING", request.amount()));
             }
-            // New key — register as PROCESSING before doing any work
+            // Register as PROCESSING before doing any work
             String orderId = request.orderId() != null ? request.orderId() : UUID.randomUUID().toString();
-            idempotencyRepository.save(new IdempotencyRecord(idempotencyKey, orderId));
+            idempotencyRepository.save(new IdempotencyRecord(effectiveKey, orderId));
         }
 
-        // ── Original Session 4 payment logic ──────────────────────────────
+        // ── Simulated delay ──────────────────────────────────────────
         if (delayMs > 0) {
             Thread.sleep(delayMs);
         }
 
+        // ── Simulated failure ────────────────────────────────────────
         if (random.nextDouble() < failureRate) {
-            if (idempotencyKey != null && idempotencyRepository != null) {
-                idempotencyRepository.findById(idempotencyKey)
+            if (idempotencyRepository != null) {
+                idempotencyRepository.findById(effectiveKey)
                         .ifPresent(r -> { r.fail("Simulated failure"); idempotencyRepository.save(r); });
+            }
+            if (paymentRepository != null) {
+                Payment failed = new Payment(
+                        UUID.randomUUID().toString(),
+                        request.orderId() != null ? request.orderId() : "unknown",
+                        request.amount(),
+                        "FAILED",
+                        null
+                );
+                paymentRepository.save(failed);
             }
             log.warn("[PAYMENT] Failed for orderId={}", request.orderId());
             throw new RuntimeException("Payment gateway timeout");
         }
 
+        // ── Success path ─────────────────────────────────────────────
         String transactionId = UUID.randomUUID().toString();
-        if (idempotencyKey != null && idempotencyRepository != null) {
-            idempotencyRepository.findById(idempotencyKey)
+        if (idempotencyRepository != null) {
+            idempotencyRepository.findById(effectiveKey)
                     .ifPresent(r -> { r.complete(transactionId); idempotencyRepository.save(r); });
         }
+        if (paymentRepository != null) {
+            Payment completed = new Payment(
+                    UUID.randomUUID().toString(),
+                    request.orderId() != null ? request.orderId() : "unknown",
+                    request.amount(),
+                    "COMPLETED",
+                    transactionId
+            );
+            paymentRepository.save(completed);
+        }
+
         log.info("[PAYMENT] Completed orderId={} txId={}", request.orderId(), transactionId);
         return ResponseEntity.ok(new PaymentResponse(
                 transactionId,
                 "APPROVED",
                 request.amount()
+        ));
+    }
+
+    @PostMapping("/{id}/refund")
+    public ResponseEntity<PaymentResponse> refundPayment(@PathVariable String id) {
+        if (paymentRepository == null) {
+            return ResponseEntity.ok(new PaymentResponse(UUID.randomUUID().toString(), "REFUNDED", null));
+        }
+
+        Optional<Payment> paymentOpt = paymentRepository.findById(id)
+                .or(() -> paymentRepository.findByOrderId(id))
+                .or(() -> paymentRepository.findByTransactionId(id));
+
+        if (paymentOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Payment payment = paymentOpt.get();
+        payment.setStatus("REFUNDED");
+        paymentRepository.save(payment);
+
+        log.info("[PAYMENT] Refunded payment id={} orderId={}", payment.getId(), payment.getOrderId());
+        return ResponseEntity.ok(new PaymentResponse(
+                payment.getTransactionId(),
+                "REFUNDED",
+                payment.getAmount()
         ));
     }
 }

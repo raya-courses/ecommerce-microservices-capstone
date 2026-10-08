@@ -1,46 +1,56 @@
 package com.microservices.pro.orderservice;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 
 /**
- * Order — Session 7.
- *
- * JPA entity (the docx uses orderRepository.save(order) / findById(...)
- * directly — this is Session 7's own original content, not a deferred
- * homework upgrade like Product.java's JPA conversion in Session 8).
- *
- * orderId is a String (UUID), assigned by the application — not an
- * auto-generated database identity — matching
- * UUID.randomUUID().toString() in OrderService.createOrder().
+ * Order — JPA entity backed by orders table.
  */
 @Entity
+@Table(name = "orders")
 public class Order {
 
     @Id
+    @Column(name = "order_id", nullable = false)
     private String orderId;
 
+    @Column(name = "product_id", nullable = false)
     private String productId;
+
+    @Column(nullable = false)
     private int quantity;
+
+    @Column(nullable = false)
     private BigDecimal amount;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private OrderStatus status;
+
+    @Column(name = "customer_id")
+    private String customerId;
 
     protected Order() {
         // required by JPA
     }
 
     public Order(String orderId, String productId, int quantity, BigDecimal amount, OrderStatus status) {
+        this(orderId, productId, quantity, amount, status, null);
+    }
+
+    public Order(String orderId, String productId, int quantity, BigDecimal amount, OrderStatus status, String customerId) {
         this.orderId = orderId;
         this.productId = productId;
         this.quantity = quantity;
         this.amount = amount;
         this.status = status;
+        this.customerId = customerId;
     }
 
     public String getOrderId() {
@@ -65,5 +75,13 @@ public class Order {
 
     public void setStatus(OrderStatus status) {
         this.status = status;
+    }
+
+    public String getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(String customerId) {
+        this.customerId = customerId;
     }
 }

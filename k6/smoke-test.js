@@ -1,4 +1,4 @@
-// smoke-test.js — Session 23, Lab 19
+// smoke-test.js — Session 23, Lab 19 / Capstone Phase 7
 //
 // The simplest possible k6 script: 1 VU, 10s, just prove the endpoint
 // responds correctly before running any serious load.
@@ -26,7 +26,14 @@ export default function () {
   check(res, {
     'status is 200':       (r) => r.status === 200,
     'response time < 1s':  (r) => r.timings.duration < 1000,
-    'body is JSON array':  (r) => Array.isArray(JSON.parse(r.body)),
+    'body is JSON content': (r) => {
+      try {
+        const body = JSON.parse(r.body);
+        return Array.isArray(body) || Array.isArray(body.content);
+      } catch {
+        return false;
+      }
+    },
   });
 
   sleep(1);

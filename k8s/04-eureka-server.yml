@@ -16,6 +16,7 @@ spec:
       labels:
         app: eureka-server
     spec:
+      serviceAccountName: eureka-server-sa
       containers:
         - name: eureka-server
           image: microservices-pro/eureka-server:latest

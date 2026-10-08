@@ -1,8 +1,5 @@
 # application.yml — Eureka Server
 # Session 1 — Architecture & Spring Cloud
-#
-# This server does NOT register itself: it IS the registry.
-# register-with-eureka: false / fetch-registry: false are how we tell it that.
 
 server:
   port: 8761
@@ -17,12 +14,15 @@ eureka:
     fetch-registry: false
   server:
     enable-self-preservation: false  # DEV ONLY — disables Eureka's network-partition
-                                      # safety net so deregistration is immediate during
-                                      # labs/demos. NEVER set this to false in production —
-                                      # it protects the registry during real network blips.
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: ${MANAGEMENT_ZIPKIN_TRACING_ENDPOINT:http://localhost:9411/api/v2/spans}

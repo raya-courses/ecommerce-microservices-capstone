@@ -1,7 +1,18 @@
 package com.microservices.pro.orderservice.events;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
- * PaymentCompletedEvent — Session 7.
- * Published by Payment Service to "payment-events" on successful payment.
+ * PaymentCompletedEvent — Session 7 / Phase 5.
  */
-public record PaymentCompletedEvent(String orderId, String transactionId) {}
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record PaymentCompletedEvent(
+        String orderId,
+        String transactionId,
+        @JsonProperty("eventType") String eventType
+) {
+    public PaymentCompletedEvent(String orderId, String transactionId) {
+        this(orderId, transactionId, "PaymentCompletedEvent");
+    }
+}

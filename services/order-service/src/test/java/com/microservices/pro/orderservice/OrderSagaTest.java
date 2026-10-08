@@ -6,30 +6,16 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.kafka.core.KafkaTemplate;
 
 import java.math.BigDecimal;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * OrderSagaTest — Session 7, Lab 5A, Task 5.
- *
- * Matches the original lab spec's required tests:
- *   Test 1: createOrder() saves order with PENDING status
- *           (verify: orderRepository.save() called with status=PENDING)
- *   Test 2: createOrder() publishes OrderPlacedEvent to "order-events"
- *           (verify: kafkaTemplate.send("order-events", ...) called)
- *   Test 3: handlePaymentFailed() updates order to PAYMENT_FAILED
- *           (call the method with a PaymentFailedEvent — verify status update)
- *
- * Test 3 is exercised on OrderSagaEventHandler (where the docx's own code
- * actually places handlePaymentEvent — see OrderSagaEventHandler.java),
- * not on OrderService, since that is where this repo's
- * @KafkaListener-annotated handling logic lives.
+ * OrderSagaTest — Session 7 / Phase 5 Transactional Outbox.
  */
 @ExtendWith(MockitoExtension.class)
 class OrderSagaTest {
@@ -38,10 +24,10 @@ class OrderSagaTest {
     private OrderService orderService;
 
     @Mock
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private OrderRepository orderRepository;
 
     @Mock
-    private OrderRepository orderRepository;
+    private OutboxRepository outboxRepository;
 
     @Mock
     private InventoryClient inventoryClient;
@@ -60,16 +46,20 @@ class OrderSagaTest {
     }
 
     @Test
-    void createOrder_publishesOrderPlacedEvent_toOrderEventsTopic() {
+    void createOrder_writesOutboxEvent_withoutDirectKafkaSend() {
         OrderRequest request = new OrderRequest("PROD-001", 2, new BigDecimal("200.00"), "cust-1");
         when(inventoryClient.checkStock("PROD-001", 2))
                 .thenReturn(new StockCheckResponse("PROD-001", 2, true, 98));
 
         orderService.createOrder(request);
 
-        verify(kafkaTemplate).send(
-                org.mockito.ArgumentMatchers.eq("order-events"),
-                org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.any(com.microservices.pro.orderservice.events.OrderPlacedEvent.class));
+        ArgumentCaptor<OutboxEvent> outboxCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxRepository).save(outboxCaptor.capture());
+
+        OutboxEvent outboxEvent = outboxCaptor.getValue();
+        assertThat(outboxEvent.getEventType()).isEqualTo("OrderPlacedEvent");
+        assertThat(outboxEvent.getAggregateType()).isEqualTo("ORDER");
+        assertThat(outboxEvent.isPublished()).isFalse();
+        assertThat(outboxEvent.getPayload()).contains("PROD-001");
     }
 }

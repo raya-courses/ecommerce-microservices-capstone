@@ -16,6 +16,7 @@ spec:
       labels:
         app: config-server
     spec:
+      serviceAccountName: config-server-sa
       containers:
         - name: config-server
           image: microservices-pro/config-server:latest

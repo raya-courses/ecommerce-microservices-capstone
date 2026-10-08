@@ -8,7 +8,7 @@
     {
       "clientId": "gateway",
       "name": "API Gateway Client",
-      "description": "Confidential client — Authorization Code Flow (Session 19)",
+      "description": "Gateway Resource Server client",
       "enabled": true,
       "publicClient": false,
       "secret": "gateway-secret-dev-only",
@@ -24,7 +24,7 @@
     {
       "clientId": "order-service",
       "name": "Order Service Client",
-      "description": "Service-account client — Client Credentials Flow (Session 20). Used when order-service calls inventory-service with no user context.",
+      "description": "Service-account client — Client Credentials Flow. Used when order-service calls inventory-service with no user context.",
       "enabled": true,
       "publicClient": false,
       "secret": "order-service-secret-dev-only",
@@ -48,7 +48,7 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["customer"]
+      "realmRoles": ["CUSTOMER", "customer"]
     },
     {
       "username": "admin1",
@@ -63,18 +63,26 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["customer", "admin"]
+      "realmRoles": ["ADMIN", "admin", "CUSTOMER", "customer"]
     }
   ],
   "roles": {
     "realm": [
       {
-        "name": "customer",
+        "name": "ADMIN",
+        "description": "Administrator role with full access"
+      },
+      {
+        "name": "CUSTOMER",
         "description": "Standard customer role"
       },
       {
         "name": "admin",
-        "description": "Admin role — access to /api/admin/** routes (Session 20)"
+        "description": "Admin role alias"
+      },
+      {
+        "name": "customer",
+        "description": "Customer role alias"
       }
     ]
   }

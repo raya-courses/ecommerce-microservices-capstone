@@ -1,8 +1,18 @@
 package com.microservices.pro.orderservice.events;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
- * PaymentFailedEvent — Session 7.
- * Published by Payment Service to "payment-events" when payment fails.
- * Triggers compensation: Inventory releases the reservation, Order is cancelled.
+ * PaymentFailedEvent — Session 7 / Phase 5.
  */
-public record PaymentFailedEvent(String orderId, String reason) {}
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record PaymentFailedEvent(
+        String orderId,
+        String reason,
+        @JsonProperty("eventType") String eventType
+) {
+    public PaymentFailedEvent(String orderId, String reason) {
+        this(orderId, reason, "PaymentFailedEvent");
+    }
+}

@@ -1,8 +1,14 @@
 package com.microservices.pro.inventoryservice.events;
 
-/**
- * InventoryReleasedEvent — Session 7.
- * Published by Inventory Service to "inventory-events" after compensation
- * (releasing a reservation following PaymentFailed).
- */
-public record InventoryReleasedEvent(String orderId) {}
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record InventoryReleasedEvent(
+        String orderId,
+        @JsonProperty("eventType") String eventType
+) {
+    public InventoryReleasedEvent(String orderId) {
+        this(orderId, "InventoryReleasedEvent");
+    }
+}

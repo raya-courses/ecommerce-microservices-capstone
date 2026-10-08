@@ -9,6 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -36,7 +37,8 @@ class OrderControllerTest {
 
         when(orderService.createOrder(any(OrderRequest.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/orders")
+        mockMvc.perform(post("/api/v1/orders")
+                        .header("X-User-Id", "CUST-1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
@@ -46,10 +48,58 @@ class OrderControllerTest {
     }
 
     @Test
+    void createOrder_whenRejected_returns409() throws Exception {
+        OrderRequest request = new OrderRequest("PROD-001", 2, new BigDecimal("49.98"), "CUST-1");
+        OrderResponse response = new OrderResponse(null, "REJECTED", "Insufficient stock: only 0 available");
+
+        when(orderService.createOrder(any(OrderRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value("REJECTED"));
+    }
+
+    @Test
+    void getOrder_whenOwner_returnsOrder() throws Exception {
+        Order order = new Order("ORD-123", "PROD-001", 2, new BigDecimal("49.98"), OrderStatus.PENDING, "CUST-1");
+        when(orderService.getOrder("ORD-123")).thenReturn(order);
+
+        mockMvc.perform(get("/api/v1/orders/ORD-123")
+                        .header("X-User-Id", "CUST-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderId").value("ORD-123"))
+                .andExpect(jsonPath("$.customerId").value("CUST-1"));
+    }
+
+    @Test
+    void getOrder_whenDifferentUser_returns403() throws Exception {
+        Order order = new Order("ORD-123", "PROD-001", 2, new BigDecimal("49.98"), OrderStatus.PENDING, "CUST-1");
+        when(orderService.getOrder("ORD-123")).thenReturn(order);
+
+        mockMvc.perform(get("/api/v1/orders/ORD-123")
+                        .header("X-User-Id", "CUST-OTHER"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    void getOrders_returnsCustomerOrders() throws Exception {
+        Order order = new Order("ORD-123", "PROD-001", 2, new BigDecimal("49.98"), OrderStatus.PENDING, "CUST-1");
+        when(orderService.getOrdersByCustomerId("CUST-1")).thenReturn(List.of(order));
+
+        mockMvc.perform(get("/api/v1/orders")
+                        .header("X-User-Id", "CUST-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].orderId").value("ORD-123"));
+    }
+
+    @Test
     void getStatus_returnsOrderStatus() throws Exception {
         when(orderService.getOrderStatus("ORD-123")).thenReturn(OrderStatus.CONFIRMED);
 
-        mockMvc.perform(get("/api/orders/ORD-123/status"))
+        mockMvc.perform(get("/api/v1/orders/ORD-123/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").value("CONFIRMED"));
     }

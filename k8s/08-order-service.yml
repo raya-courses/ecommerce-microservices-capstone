@@ -16,6 +16,7 @@ spec:
       labels:
         app: order-service
     spec:
+      serviceAccountName: order-service-sa
       containers:
         - name: order-service
           image: microservices-pro/order-service:latest

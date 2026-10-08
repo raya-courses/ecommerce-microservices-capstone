@@ -5,6 +5,7 @@ namespace: microservices-pro
 
 resources:
   - 00-namespace.yml
+  - 00-serviceaccounts.yml
   - 01-configmaps.yml
   - 02-secrets.yml
   - 03-infrastructure.yml

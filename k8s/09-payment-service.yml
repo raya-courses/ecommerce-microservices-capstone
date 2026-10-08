@@ -16,6 +16,7 @@ spec:
       labels:
         app: payment-service
     spec:
+      serviceAccountName: payment-service-sa
       containers:
         - name: payment-service
           image: microservices-pro/payment-service:latest

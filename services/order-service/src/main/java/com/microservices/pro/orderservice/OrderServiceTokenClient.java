@@ -13,25 +13,8 @@ import java.time.Instant;
 import java.util.Map;
 
 /**
- * OrderServiceTokenClient — Session 20.
- *
- * Obtains a Keycloak access_token for order-service via the Client Credentials
- * Flow (no user, no redirect, no browser). Used when order-service needs to
- * call inventory-service in a background/async context where no customer JWT
- * is available to propagate.
- *
- * TOKEN CACHING: a new token is only requested when the cached one expires
- * (or on the first call). Without caching, every Feign call would trigger
- * a Keycloak round-trip — unnecessary overhead and a potential rate-limit risk.
- *
- * This bean is @Service (singleton scope) — the cached token and expiry
- * fields persist across calls on the same instance. If this were
- * prototype-scoped, caching would be silently broken (new instance = null
- * cache every call). See Common Issues §5, Session 20 docx.
- *
- * NOTE: this client is used on the ASYNC/BACKGROUND path only (where no
- * customer JWT is in context). For customer-context calls, FeignJwtInterceptor
- * (Session 6) still propagates the customer's token — no change needed there.
+ * OrderServiceTokenClient — Obtains a Keycloak access_token for order-service via
+ * Client Credentials Flow when calling downstream services in a background/async context.
  */
 @Service
 public class OrderServiceTokenClient {
@@ -47,10 +30,21 @@ public class OrderServiceTokenClient {
     @Value("${keycloak.client-secret:order-service-secret-dev-only}")
     private String clientSecret;
 
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient;
 
     private String cachedToken = null;
     private Instant expiresAt = Instant.MIN;
+
+    public OrderServiceTokenClient() {
+        this.restClient = RestClient.create();
+    }
+
+    public OrderServiceTokenClient(String tokenEndpoint, String clientId, String clientSecret, RestClient restClient) {
+        this.tokenEndpoint = tokenEndpoint;
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+        this.restClient = restClient != null ? restClient : RestClient.create();
+    }
 
     public String getAccessToken() {
         if (cachedToken != null && Instant.now().isBefore(expiresAt.minusSeconds(30))) {
@@ -84,5 +78,10 @@ public class OrderServiceTokenClient {
 
         log.info("[CLIENT-CREDENTIALS] Token obtained, expires in {}s", expiresIn);
         return cachedToken;
+    }
+
+    public void setCachedTokenForTesting(String token, Instant expiresAt) {
+        this.cachedToken = token;
+        this.expiresAt = expiresAt;
     }
 }

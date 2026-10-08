@@ -16,6 +16,7 @@ spec:
       labels:
         app: inventory-service
     spec:
+      serviceAccountName: inventory-service-sa
       containers:
         - name: inventory-service
           image: microservices-pro/inventory-service:latest

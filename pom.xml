@@ -19,6 +19,18 @@
         <module>services/order-service</module>
         <module>services/inventory-service</module>
         <module>services/payment-service</module>
-        <module>tools/jwt-generator</module>
+        <module>services/notification-service</module>
     </modules>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>0.8.12</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 </project>

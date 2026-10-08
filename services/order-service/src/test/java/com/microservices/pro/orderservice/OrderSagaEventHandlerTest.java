@@ -11,19 +11,11 @@ import java.math.BigDecimal;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
 /**
- * OrderSagaEventHandlerTest — Session 7, Lab 5A, Task 5, Test 3.
- *
- * "handlePaymentFailed() updates order to PAYMENT_FAILED — call the method
- * with a PaymentFailedEvent — verify status update."
- *
- * The docx's own OrderSagaEventHandler.handlePaymentEvent() takes a raw
- * JSON string (see class-level note on OrderSagaEventHandler.java for why),
- * so this test supplies a real JSON payload matching PaymentFailedEvent's
- * fields rather than constructing the event object directly.
+ * OrderSagaEventHandlerTest — Session 7 / Phase 5 Saga Choreography & Idempotency.
  */
 @ExtendWith(MockitoExtension.class)
 class OrderSagaEventHandlerTest {
@@ -34,17 +26,93 @@ class OrderSagaEventHandlerTest {
     @Mock
     private OrderRepository orderRepository;
 
+    @Mock
+    private OutboxRepository outboxRepository;
+
     @Test
     void handlePaymentEvent_updatesOrderToPaymentFailed_onPaymentFailedJson() {
-        Order existingOrder = new Order("order-123", "PROD-001", 2, new BigDecimal("200.00"), OrderStatus.PENDING);
+        Order existingOrder = new Order("order-123", "PROD-001", 2, new BigDecimal("200.00"), OrderStatus.PENDING, "cust-1");
         when(orderRepository.findById("order-123")).thenReturn(Optional.of(existingOrder));
 
-        String paymentFailedJson = "{\"orderId\":\"order-123\",\"reason\":\"PaymentFailed: card declined\"}";
+        String paymentFailedJson = "{\"orderId\":\"order-123\",\"reason\":\"PaymentFailed: card declined\",\"eventType\":\"PaymentFailedEvent\"}";
 
         handler.handlePaymentEvent(paymentFailedJson);
 
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
         verify(orderRepository).save(orderCaptor.capture());
         assertThat(orderCaptor.getValue().getStatus()).isEqualTo(OrderStatus.PAYMENT_FAILED);
+    }
+
+    @Test
+    void handlePaymentEvent_updatesOrderToConfirmed_andEmitsOutbox_onPaymentCompleted() {
+        Order existingOrder = new Order("order-123", "PROD-001", 2, new BigDecimal("200.00"), OrderStatus.PENDING, "cust-1");
+        when(orderRepository.findById("order-123")).thenReturn(Optional.of(existingOrder));
+
+        String paymentCompletedJson = "{\"orderId\":\"order-123\",\"transactionId\":\"TX-999\",\"eventType\":\"PaymentCompletedEvent\"}";
+
+        handler.handlePaymentEvent(paymentCompletedJson);
+
+        verify(orderRepository).save(existingOrder);
+        assertThat(existingOrder.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+
+        ArgumentCaptor<OutboxEvent> outboxCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxRepository).save(outboxCaptor.capture());
+        assertThat(outboxCaptor.getValue().getEventType()).isEqualTo("OrderConfirmedEvent");
+        assertThat(outboxCaptor.getValue().getPayload()).contains("TX-999");
+    }
+
+    @Test
+    void handlePaymentEvent_duplicateCompletedDoesNotCorruptStateOrReEmit() {
+        Order alreadyConfirmed = new Order("order-123", "PROD-001", 2, new BigDecimal("200.00"), OrderStatus.CONFIRMED, "cust-1");
+        when(orderRepository.findById("order-123")).thenReturn(Optional.of(alreadyConfirmed));
+
+        String paymentCompletedJson = "{\"orderId\":\"order-123\",\"transactionId\":\"TX-999\",\"eventType\":\"PaymentCompletedEvent\"}";
+
+        handler.handlePaymentEvent(paymentCompletedJson);
+
+        verify(orderRepository, never()).save(any());
+        verify(outboxRepository, never()).save(any());
+    }
+
+    @Test
+    void handlePaymentEvent_duplicateFailedDoesNotCorruptState() {
+        Order alreadyFailed = new Order("order-123", "PROD-001", 2, new BigDecimal("200.00"), OrderStatus.PAYMENT_FAILED, "cust-1");
+        when(orderRepository.findById("order-123")).thenReturn(Optional.of(alreadyFailed));
+
+        String paymentFailedJson = "{\"orderId\":\"order-123\",\"reason\":\"PaymentFailed: card declined\",\"eventType\":\"PaymentFailedEvent\"}";
+
+        handler.handlePaymentEvent(paymentFailedJson);
+
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void handleInventoryReleased_cancelsOrder_andEmitsOutboxEvent() {
+        Order existingOrder = new Order("order-123", "PROD-001", 2, new BigDecimal("200.00"), OrderStatus.PAYMENT_FAILED, "cust-1");
+        when(orderRepository.findById("order-123")).thenReturn(Optional.of(existingOrder));
+
+        String releasedJson = "{\"orderId\":\"order-123\",\"eventType\":\"InventoryReleasedEvent\"}";
+
+        handler.handleInventoryReleased(releasedJson);
+
+        verify(orderRepository).save(existingOrder);
+        assertThat(existingOrder.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+
+        ArgumentCaptor<OutboxEvent> outboxCaptor = ArgumentCaptor.forClass(OutboxEvent.class);
+        verify(outboxRepository).save(outboxCaptor.capture());
+        assertThat(outboxCaptor.getValue().getEventType()).isEqualTo("OrderCancelledEvent");
+    }
+
+    @Test
+    void handleInventoryReleased_duplicateReleaseDoesNotCorruptState() {
+        Order alreadyCancelled = new Order("order-123", "PROD-001", 2, new BigDecimal("200.00"), OrderStatus.CANCELLED, "cust-1");
+        when(orderRepository.findById("order-123")).thenReturn(Optional.of(alreadyCancelled));
+
+        String releasedJson = "{\"orderId\":\"order-123\",\"eventType\":\"InventoryReleasedEvent\"}";
+
+        handler.handleInventoryReleased(releasedJson);
+
+        verify(orderRepository, never()).save(any());
+        verify(outboxRepository, never()).save(any());
     }
 }

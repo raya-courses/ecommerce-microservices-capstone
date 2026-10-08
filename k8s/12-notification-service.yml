@@ -16,6 +16,7 @@ spec:
       labels:
         app: notification-service
     spec:
+      serviceAccountName: notification-service-sa
       containers:
         - name: notification-service
           image: microservices-pro/notification-service:latest

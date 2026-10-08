@@ -1,7 +1,7 @@
 # docker-compose.yml
 # End-to-end platform orchestration for Microservices Pro Platform.
-# Runs backing infrastructure (PostgreSQL, Redis, Kafka, Zookeeper)
-# and all 7 containerized Spring Cloud microservices + Notification Service + Keycloak.
+# Runs backing infrastructure (PostgreSQL, Redis, Kafka, Zookeeper, Keycloak, Zipkin, Prometheus, Grafana)
+# and all 7 containerized Spring Cloud microservices + Notification Service.
 
 services:
   postgres:
@@ -12,7 +12,9 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: microservices_pro
+      POSTGRES_DB: postgres
+    volumes:
+      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -67,6 +69,9 @@ services:
     container_name: config-server
     ports:
       - "8888:8888"
+    environment:
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8888/actuator/health || exit 1"]
       interval: 10s
@@ -85,6 +90,8 @@ services:
       - "8761:8761"
     environment:
       SPRING_CONFIG_IMPORT: "optional:configserver:http://config-server:8888"
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8761/actuator/health || exit 1"]
       interval: 10s
@@ -108,6 +115,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:8761/eureka/"
       SPRING_DATA_REDIS_HOST: "redis"
       SPRING_DATA_REDIS_PORT: 6379
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
       interval: 10s
@@ -131,11 +140,13 @@ services:
     environment:
       SPRING_CONFIG_IMPORT: "optional:configserver:http://config-server:8888"
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:8761/eureka/"
-      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/microservices_pro"
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/product_db"
       SPRING_DATASOURCE_USERNAME: "postgres"
       SPRING_DATASOURCE_PASSWORD: "postgres"
       SPRING_DATA_REDIS_HOST: "redis"
       SPRING_DATA_REDIS_PORT: 6379
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8081/actuator/health || exit 1"]
       interval: 10s
@@ -150,6 +161,8 @@ services:
     depends_on:
       eureka-server:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       kafka:
         condition: service_healthy
     ports:
@@ -157,7 +170,12 @@ services:
     environment:
       SPRING_CONFIG_IMPORT: "optional:configserver:http://config-server:8888"
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:8761/eureka/"
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/inventory_db"
+      SPRING_DATASOURCE_USERNAME: "postgres"
+      SPRING_DATASOURCE_PASSWORD: "postgres"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8084/actuator/health || exit 1"]
       interval: 10s
@@ -172,6 +190,8 @@ services:
     depends_on:
       eureka-server:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       kafka:
         condition: service_healthy
     ports:
@@ -179,8 +199,13 @@ services:
     environment:
       SPRING_CONFIG_IMPORT: "optional:configserver:http://config-server:8888"
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:8761/eureka/"
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/payment_db"
+      SPRING_DATASOURCE_USERNAME: "postgres"
+      SPRING_DATASOURCE_PASSWORD: "postgres"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
       PAYMENT_FAILURE_RATE: 0.0
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8083/actuator/health || exit 1"]
       interval: 10s
@@ -204,10 +229,12 @@ services:
     environment:
       SPRING_CONFIG_IMPORT: "optional:configserver:http://config-server:8888"
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:8761/eureka/"
-      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/microservices_pro"
+      SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/order_db"
       SPRING_DATASOURCE_USERNAME: "postgres"
       SPRING_DATASOURCE_PASSWORD: "postgres"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8082/actuator/health || exit 1"]
       interval: 10s
@@ -233,6 +260,8 @@ services:
       SPRING_CONFIG_IMPORT: "optional:configserver:http://config-server:8888"
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:8761/eureka/"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8085/actuator/health || exit 1"]
       interval: 10s
@@ -251,3 +280,54 @@ services:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     ports:
       - "8180:8080"
+
+  # ==========================================
+  # Observability Stack (Zipkin, Prometheus, Grafana)
+  # ==========================================
+
+  zipkin:
+    image: openzipkin/zipkin:3
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+    environment:
+      - STORAGE_TYPE=mem
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9411/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./observability/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./observability/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
