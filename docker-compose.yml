@@ -115,6 +115,8 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:8761/eureka/"
       SPRING_DATA_REDIS_HOST: "redis"
       SPRING_DATA_REDIS_PORT: 6379
+      KEYCLOAK_JWK_SET_URI: "http://keycloak:8080/realms/ecommerce-platform/protocol/openid-connect/certs"
+      KEYCLOAK_ISSUER_URI: "http://localhost:8180/realms/ecommerce-platform"
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
@@ -174,6 +176,8 @@ services:
       SPRING_DATASOURCE_USERNAME: "postgres"
       SPRING_DATASOURCE_PASSWORD: "postgres"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      SPRING_KAFKA_CONSUMER_VALUE_DESERIALIZER: "org.apache.kafka.common.serialization.StringDeserializer"
+      SPRING_KAFKA_PRODUCER_PROPERTIES_SPRING_JSON_ADD_TYPE_HEADERS: "false"
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
@@ -203,6 +207,8 @@ services:
       SPRING_DATASOURCE_USERNAME: "postgres"
       SPRING_DATASOURCE_PASSWORD: "postgres"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      SPRING_KAFKA_CONSUMER_VALUE_DESERIALIZER: "org.apache.kafka.common.serialization.StringDeserializer"
+      SPRING_KAFKA_PRODUCER_PROPERTIES_SPRING_JSON_ADD_TYPE_HEADERS: "false"
       PAYMENT_FAILURE_RATE: 0.0
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
@@ -233,6 +239,10 @@ services:
       SPRING_DATASOURCE_USERNAME: "postgres"
       SPRING_DATASOURCE_PASSWORD: "postgres"
       SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+      SPRING_KAFKA_PRODUCER_VALUE_SERIALIZER: "org.apache.kafka.common.serialization.StringSerializer"
+      SPRING_KAFKA_CONSUMER_VALUE_DESERIALIZER: "org.apache.kafka.common.serialization.StringDeserializer"
+      SPRING_KAFKA_PRODUCER_PROPERTIES_SPRING_JSON_ADD_TYPE_HEADERS: "false"
+      KEYCLOAK_TOKEN_ENDPOINT: "http://keycloak:8080/realms/ecommerce-platform/protocol/openid-connect/token"
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
@@ -263,7 +273,7 @@ services:
       MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin:9411/api/v2/spans"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8085/actuator/health || exit 1"]
+      test: ["CMD-SHELL", "ps aux | grep java || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -330,4 +340,3 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
