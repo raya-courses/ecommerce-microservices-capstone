@@ -4,6 +4,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 import java.math.BigDecimal;
 
@@ -19,6 +20,7 @@ import java.math.BigDecimal;
  * UUID.randomUUID().toString() in OrderService.createOrder().
  */
 @Entity
+@Table(name = "orders")
 public class Order {
 
     @Id
