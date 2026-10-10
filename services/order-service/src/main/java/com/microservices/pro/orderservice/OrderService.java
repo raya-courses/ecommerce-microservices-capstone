@@ -149,6 +149,7 @@ public class OrderService {
                         request.amount(),
                         request.customerId()
                 ));
+        log.info("[SAGA] OrderPlaced → InventoryReserved → PaymentCompleted → CONFIRMED");
 
         return new OrderResponse(order.getOrderId(), "PENDING", "Order received — processing...");
     }
